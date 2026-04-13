@@ -1,12 +1,16 @@
 {
   "name": "tankit",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "ci": "npm run test && npm run build"
   },
   "dependencies": {
     "leaflet": "^1.9.4",
@@ -15,7 +19,13 @@
     "react-leaflet": "^4.2.1"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.4.6",
+    "@testing-library/react": "^16.0.0",
+    "@testing-library/user-event": "^14.5.2",
     "@vitejs/plugin-react": "^4.3.1",
-    "vite": "^5.4.0"
+    "@vitest/coverage-v8": "^2.0.5",
+    "jsdom": "^24.1.1",
+    "vite": "^5.4.0",
+    "vitest": "^2.0.5"
   }
 }

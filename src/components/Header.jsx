@@ -12,10 +12,9 @@ const BRAND_LOGOS = {
   JET:     { bg: '#e4251a', color: '#fff', abbr: 'JT' },
   STAR:    { bg: '#002d73', color: '#ffd700', abbr: 'ST' },
   AVIA:    { bg: '#e41e20', color: '#fff', abbr: 'AV' },
-  TAMOIL: { bg: '#cc0000', color: '#ffd700', abbr: 'TA' },
-  HEM:     { bg: '#0066b2', color: '#fff', abbr: 'HM' },
-  HEM:     { bg: '#0066b2', color: '#fff', abbr: 'HM' },
-  WESTFALEN: { bg: '#003f8a', color: '#fff', abbr: 'WF' },
+  TAMOIL:    { bg: '#cc0000', color: '#ffd700', abbr: 'TA' },
+  HEM:       { bg: '#0066b2', color: '#fff',    abbr: 'HM' },
+  WESTFALEN: { bg: '#003f8a', color: '#fff',    abbr: 'WF' },
 }
 
 export function BrandBadge({ brand, size = 36 }) {

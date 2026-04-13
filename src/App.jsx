@@ -1,13 +1,16 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react'
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import Header from './components/Header.jsx'
 import SearchPanel from './components/SearchPanel.jsx'
 import StationList from './components/StationList.jsx'
 import MapView from './components/MapView.jsx'
 import BottomNav from './components/BottomNav.jsx'
-import { fetchStations, sortStations } from './services/tankerkoenig.js'
+import PriceReportModal from './components/PriceReportModal.jsx'
+import { findStations } from './services/overpass.js'
+import { fetchPricesForStations, reportPrice } from './services/priceStore.js'
 import { geocodePostcode, reverseGeocode } from './services/geocoding.js'
+import { sortStations } from './utils/formatters.js'
 
-// Persist preference to localStorage
+// Persist a value in localStorage
 function usePersisted(key, defaultVal) {
   const [val, setVal] = useState(() => {
     try { return JSON.parse(localStorage.getItem(key)) ?? defaultVal }
@@ -21,61 +24,77 @@ function usePersisted(key, defaultVal) {
 }
 
 export default function App() {
-  // ── Persisted preferences ──
-  const [language,  setLanguage]  = usePersisted('tankit_lang', 'de')
-  const [radius,    setRadius]    = usePersisted('tankit_radius', 10)
-  const [fuelType,  setFuelType]  = usePersisted('tankit_fuel', 'e5')
-  const [sortBy,    setSortBy]    = usePersisted('tankit_sort', 'price')
+  // ── Persisted preferences ──────────────────────────────────────────────
+  const [language, setLanguage] = usePersisted('tankit_lang',   'de')
+  const [radius,   setRadius]   = usePersisted('tankit_radius', 10)
+  const [fuelType, setFuelType] = usePersisted('tankit_fuel',   'e5')
+  const [sortBy,   setSortBy]   = usePersisted('tankit_sort',   'price')
 
-  // ── Search state ──
-  const [postcode,         setPostcode]         = useState('')
-  const [locationLabel,    setLocationLabel]    = useState('')
-  const [userCoords,       setUserCoords]       = useState(null)
-  const [stations,         setStations]         = useState([])
-  const [loading,          setLoading]          = useState(false)
-  const [geoLoading,       setGeoLoading]       = useState(false)
-  const [error,            setError]            = useState(null)
-  const [searched,         setSearched]         = useState(false)
-  const [selectedStation,  setSelectedStation]  = useState(null)
+  // ── Search state ───────────────────────────────────────────────────────
+  const [postcode,        setPostcode]        = useState('')
+  const [userCoords,      setUserCoords]      = useState(null)
+  const [stations,        setStations]        = useState([])
+  const [prices,          setPrices]          = useState({}) // { stationId: { e5, e10, diesel } }
+  const [loading,         setLoading]         = useState(false)
+  const [geoLoading,      setGeoLoading]      = useState(false)
+  const [error,           setError]           = useState(null)
+  const [searched,        setSearched]        = useState(false)
+  const [selectedStation, setSelectedStation] = useState(null)
+  const [activeTab,       setActiveTab]       = useState('search')
 
-  // ── View state (mobile) ──
-  const [activeTab, setActiveTab] = useState('search') // 'search' | 'map' | 'saved'
+  // ── Price report modal ─────────────────────────────────────────────────
+  const [reportModal, setReportModal] = useState(null) // { station }
 
-  // ── Derived: sorted stations ──
-  const sortedStations = useMemo(
-    () => sortStations(stations, fuelType, sortBy),
-    [stations, fuelType, sortBy]
-  )
+  // ── Toast notification ─────────────────────────────────────────────────
+  const [toast, setToast] = useState(null)
+  const toastTimer = useRef(null)
 
-  // ── Core search function ──
+  const showToast = useCallback((msg, type = 'success') => {
+    clearTimeout(toastTimer.current)
+    setToast({ msg, type })
+    toastTimer.current = setTimeout(() => setToast(null), 3000)
+  }, [])
+
+  // ── Refresh prices for current stations ───────────────────────────────
+  const refreshPrices = useCallback(async (stationList) => {
+    if (!stationList.length) return
+    try {
+      const ids = stationList.map((s) => s.id)
+      const p   = await fetchPricesForStations(ids)
+      setPrices(p)
+    } catch (err) {
+      console.warn('TankIT: price refresh failed', err.message)
+    }
+  }, [])
+
+  // ── Core search ────────────────────────────────────────────────────────
   const doSearch = useCallback(async (lat, lng) => {
     setLoading(true)
     setError(null)
     setSelectedStation(null)
+    setPrices({})
 
     try {
-      const results = await fetchStations({ lat, lng, radius })
+      const results = await findStations({ lat, lng, radius })
       setStations(results)
       setSearched(true)
+      await refreshPrices(results)
     } catch (err) {
-      setError(err.message || 'Unknown error')
+      setError(err.message || 'unknown')
       setStations([])
     } finally {
       setLoading(false)
     }
-  }, [radius])
+  }, [radius, refreshPrices])
 
-  // ── Search by postcode ──
+  // ── Search by postcode ─────────────────────────────────────────────────
   const handleSearch = useCallback(async () => {
     if (!postcode.trim()) return
-
     setLoading(true)
     setError(null)
-
     try {
-      const { lat, lng, displayName } = await geocodePostcode(postcode)
+      const { lat, lng } = await geocodePostcode(postcode)
       setUserCoords({ lat, lng })
-      setLocationLabel(displayName)
       await doSearch(lat, lng)
     } catch (err) {
       setError(err.message)
@@ -83,7 +102,7 @@ export default function App() {
     }
   }, [postcode, doSearch])
 
-  // ── Use device geolocation ──
+  // ── GPS geolocation ────────────────────────────────────────────────────
   const handleUseLocation = useCallback(() => {
     if (!navigator.geolocation) {
       setError('Geolocation is not supported by your browser.')
@@ -94,54 +113,93 @@ export default function App() {
 
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
-        const lat = pos.coords.latitude
-        const lng = pos.coords.longitude
+        const { latitude: lat, longitude: lng } = pos.coords
         setUserCoords({ lat, lng })
 
-        // Reverse geocode to show a friendly label
+        // Reverse geocode for friendly label in search box
         try {
           const label = await reverseGeocode(lat, lng)
-          setLocationLabel(label)
-          setPostcode(label.split(' ')[0] || '')
-        } catch {
-          setLocationLabel(`${lat.toFixed(3)}, ${lng.toFixed(3)}`)
-        }
+          const plz   = label.match(/\d{5}/)?.[0] || ''
+          setPostcode(plz || label.slice(0, 20))
+        } catch {}
 
         setGeoLoading(false)
         await doSearch(lat, lng)
       },
-      (err) => {
+      () => {
         setGeoLoading(false)
-        setError('Location access denied. Please enter a postcode instead.')
+        setError('geo_denied')
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
     )
   }, [doSearch])
 
-  // ── Re-search when radius or fuelType changes (if we have coords) ──
+  // ── Re-search when radius changes (if we have coords already) ──────────
   useEffect(() => {
-    if (userCoords && searched) {
+    if (userCoords && searched && !loading) {
       doSearch(userCoords.lat, userCoords.lng)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [radius])
 
-  // ── Select a station (sync map + list) ──
+  // ── Sorted stations ────────────────────────────────────────────────────
+  const sortedStations = useMemo(
+    () => sortStations(stations, prices, fuelType, sortBy),
+    [stations, prices, fuelType, sortBy]
+  )
+
+  // ── Select station (sync map + list) ──────────────────────────────────
   const handleSelectStation = useCallback((station) => {
     setSelectedStation((prev) => prev?.id === station.id ? null : station)
   }, [])
 
-  // ── Desktop: show split layout; Mobile: tabs ──
-  const isDesktop = typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches
+  // ── Open price report modal (or just refresh on confirmation) ──────────
+  const handleReportPrice = useCallback((station, skipModal = false) => {
+    if (skipModal) {
+      // Confirmation: just refresh prices
+      refreshPrices(stations)
+      return
+    }
+    setReportModal({ station })
+  }, [refreshPrices, stations])
 
+  // ── Submit price report ────────────────────────────────────────────────
+  const handleSubmitReport = useCallback(async ({ reports, reporterName }) => {
+    const { station } = reportModal
+    for (const { fuelType: ft, price } of reports) {
+      await reportPrice({
+        stationId:    station.id,
+        fuelType:     ft,
+        price,
+        reporterName,
+      })
+    }
+    // Refresh prices after submitting
+    await refreshPrices(stations)
+    showToast('✅ Prices updated – thank you! 🙏')
+  }, [reportModal, refreshPrices, stations, showToast])
+
+  // ── Desktop detection ──────────────────────────────────────────────────
+  const [isDesktop, setIsDesktop] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches
+  )
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)')
+    const handler = (e) => setIsDesktop(e.matches)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [])
+
+  // ── Render ─────────────────────────────────────────────────────────────
   return (
     <div style={{
-      display:        'flex',
-      flexDirection:  'column',
-      height:         '100dvh',
-      background:     'var(--bg-primary)',
-      overflow:       'hidden',
+      display:       'flex',
+      flexDirection: 'column',
+      height:        '100dvh',
+      background:    'var(--bg-primary)',
+      overflow:      'hidden',
     }}>
+
       {/* ── Header ── */}
       <Header
         language={language}
@@ -150,7 +208,7 @@ export default function App() {
         searching={loading}
       />
 
-      {/* ── Search panel (always visible) ── */}
+      {/* ── Search panel ── */}
       <SearchPanel
         language={language}
         postcode={postcode}
@@ -167,18 +225,12 @@ export default function App() {
         geoLoading={geoLoading}
       />
 
-      {/* ── Main content area ── */}
-      <div style={{
-        flex:     1,
-        display:  'flex',
-        overflow: 'hidden',
-        position: 'relative',
-      }}>
-        {/* Desktop: side-by-side  |  Mobile: active tab */}
+      {/* ── Main content ── */}
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
 
-        {/* Station list panel */}
+        {/* Station list */}
         <div style={{
-          width:         isDesktop ? '380px' : '100%',
+          width:         isDesktop ? '400px' : '100%',
           display:       (isDesktop || activeTab === 'search' || activeTab === 'saved') ? 'flex' : 'none',
           flexDirection: 'column',
           borderRight:   isDesktop ? '1px solid var(--border)' : 'none',
@@ -187,42 +239,79 @@ export default function App() {
         }}>
           <StationList
             stations={sortedStations}
+            prices={prices}
             fuelType={fuelType}
             loading={loading}
             error={error}
             searched={searched}
             selectedStation={selectedStation}
             onSelectStation={handleSelectStation}
+            onReportPrice={handleReportPrice}
             language={language}
           />
         </div>
 
-        {/* Map panel */}
+        {/* Map */}
         <div style={{
           flex:    1,
           display: (isDesktop || activeTab === 'map') ? 'block' : 'none',
-          position: 'relative',
         }}>
           <MapView
             stations={sortedStations}
+            prices={prices}
             userCoords={userCoords}
             fuelType={fuelType}
             radius={radius}
             selectedStation={selectedStation}
             onSelectStation={handleSelectStation}
+            onReportPrice={handleReportPrice}
             language={language}
           />
         </div>
       </div>
 
       {/* ── Bottom nav (mobile only) ── */}
-      <div style={{ display: isDesktop ? 'none' : 'block' }}>
+      {!isDesktop && (
         <BottomNav
           language={language}
           activeTab={activeTab}
           onTabChange={setActiveTab}
         />
-      </div>
+      )}
+
+      {/* ── Price report modal ── */}
+      {reportModal && (
+        <PriceReportModal
+          station={reportModal.station}
+          existingPrices={prices[reportModal.station.id] || null}
+          language={language}
+          onSubmit={handleSubmitReport}
+          onClose={() => setReportModal(null)}
+        />
+      )}
+
+      {/* ── Toast notification ── */}
+      {toast && (
+        <div style={{
+          position:     'fixed',
+          bottom:       isDesktop ? 24 : 80,
+          left:         '50%',
+          transform:    'translateX(-50%)',
+          background:   'var(--bg-card)',
+          color:        'var(--text-primary)',
+          border:       '1px solid var(--accent-green)',
+          borderRadius: 'var(--radius-full)',
+          padding:      '10px 20px',
+          fontSize:     '14px',
+          fontWeight:   '600',
+          zIndex:       2000,
+          boxShadow:    'var(--shadow-lg)',
+          animation:    'fadeIn 0.2s ease',
+          whiteSpace:   'nowrap',
+        }}>
+          {toast.msg}
+        </div>
+      )}
     </div>
   )
 }
