@@ -55,7 +55,7 @@ export default function SearchPanel({
           <span style={{ padding: '0 10px', fontSize: 16, flexShrink: 0 }}>🔍</span>
           <input
             ref={inputRef}
-            type="tel"
+            type="text"
             inputMode="numeric"
             pattern="[0-9]*"
             placeholder={t.searchPlaceholder}

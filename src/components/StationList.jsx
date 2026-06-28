@@ -104,7 +104,6 @@ export default function StationList({
               onSelect={onSelectStation}
               onReportPrice={onReportPrice}
               language={language}
-              rank={index + 1}
             />
           </div>
         ))}

@@ -27,6 +27,7 @@ export default function PriceReportModal({
   const [reporterName, setReporterNameState] = useState(getReporterName)
   const [submitting,   setSubmitting]   = useState(false)
   const [submitted,    setSubmitted]    = useState(false)
+  const [submitError,  setSubmitError]  = useState(null)
   const [errors,       setErrors]       = useState({})
   const [touched,      setTouched]      = useState({})
 
@@ -105,7 +106,8 @@ export default function PriceReportModal({
       await onSubmit({ reports, reporterName: reporterName.trim() || 'Anonymous' })
       setSubmitted(true)
       setTimeout(onClose, 2200)
-    } catch {
+    } catch (err) {
+      setSubmitError(t.report.submitError)
       setSubmitting(false)
     }
   }
@@ -240,6 +242,20 @@ export default function PriceReportModal({
         {errors._general && (
           <div style={{ fontSize: '13px', color: 'var(--accent-red)', textAlign: 'center' }}>
             {errors._general}
+          </div>
+        )}
+
+        {submitError && (
+          <div style={{
+            fontSize:     '13px',
+            color:        'var(--accent-red)',
+            background:   'rgba(239,35,60,0.08)',
+            border:       '1px solid rgba(239,35,60,0.3)',
+            borderRadius: 'var(--radius-sm)',
+            padding:      '10px 14px',
+            textAlign:    'center',
+          }}>
+            ⚠️ {submitError}
           </div>
         )}
 

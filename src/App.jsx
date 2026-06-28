@@ -55,6 +55,9 @@ export default function App() {
     toastTimer.current = setTimeout(() => setToast(null), 3000)
   }, [])
 
+  // Clean up toast timer on unmount
+  useEffect(() => () => clearTimeout(toastTimer.current), [])
+
   // ── Refresh prices for current stations ───────────────────────────────
   const refreshPrices = useCallback(async (stationList) => {
     if (!stationList.length) return

@@ -71,6 +71,7 @@ const translations = {
       priceTooHigh:  'Too high (max 5.00)',
       thankYouTitle: 'Thank you! 🎉',
       thankYouBody:  "You just helped everyone find cheaper fuel. You're awesome!",
+      submitError:   'Could not save prices. Please try again.',
     },
   },
 
@@ -146,6 +147,7 @@ const translations = {
       priceTooHigh:    'Zu hoch (max. 5,00)',
       thankYouTitle:   'Danke! 🎉',
       thankYouBody:    'Du hast gerade allen geholfen, günstiger zu tanken. Du bist toll!',
+      submitError:     'Preise konnten nicht gespeichert werden. Bitte erneut versuchen.',
     },
   },
 }
