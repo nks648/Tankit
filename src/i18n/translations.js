@@ -35,12 +35,7 @@ const translations = {
     updatePrice:       'Update',
     toastThanks:       'Prices updated – thank you!',
     footerStations:    'Station data',
-    footerPrices:      'Community reports update prices between official updates.',
-    footerOfficial:    'Official prices from',
-    modeOfficial:      'Official live prices (Markttransparenzstelle)',
-    sourceOfficial:    'official',
-    sourceCommunity:   'community',
-    closedNow:         'Closed',
+    footerPrices:      'Prices are reported by drivers like you.',
 
     fuels: {
       e5:     'Super E5',
@@ -113,12 +108,7 @@ const translations = {
     updatePrice:       'Melden',
     toastThanks:       'Preise aktualisiert – danke!',
     footerStations:    'Tankstellendaten',
-    footerPrices:      'Community-Meldungen ergänzen die offiziellen Preise.',
-    footerOfficial:    'Offizielle Preise von',
-    modeOfficial:      'Offizielle Live-Preise (Markttransparenzstelle)',
-    sourceOfficial:    'offiziell',
-    sourceCommunity:   'Community',
-    closedNow:         'Geschlossen',
+    footerPrices:      'Die Preise melden Fahrer wie du.',
 
     fuels: {
       e5:     'Super E5',

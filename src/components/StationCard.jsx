@@ -30,10 +30,8 @@ export default function StationCard({
   const fmt   = formatPrice(price)
   const info  = prices?.[fuelType] ?? null
 
-  const isOfficial  = info?.source === 'official'
-  const isCommunity = info?.source === 'community'
-  const ago         = isCommunity ? timeAgo(info.reportedAt, t) : null
-  const alreadyConf = isCommunity && hasConfirmed(station.id, fuelType)
+  const ago         = timeAgo(info?.reportedAt, t)
+  const alreadyConf = !!info && hasConfirmed(station.id, fuelType)
   const confCount   = info?.confirmations ?? 0
 
   const handleConfirm = (e) => {
@@ -63,25 +61,17 @@ export default function StationCard({
           <div className="card-title">
             <strong>{station.brand || station.name}</strong>
             {isBest && price && <span className="chip">{t.bestDeal}</span>}
-            {station.isOpen === false && <span className="chip closed">{t.closedNow}</span>}
           </div>
           <div className="card-sub">
             {formatAddress(station) || `${station.lat?.toFixed(4)}, ${station.lng?.toFixed(4)}`}
           </div>
           <div className="card-meta">
             {station.dist != null && <span className="tabular">{station.dist.toFixed(1)} {t.km}</span>}
-            {isOfficial && (
-              <>
-                <span aria-hidden="true">·</span>
-                <span className="dot" style={{ background: 'var(--green)' }} />
-                <span>{t.sourceOfficial}</span>
-              </>
-            )}
             {ago && (
               <>
                 <span aria-hidden="true">·</span>
                 <span className="dot" style={{ background: freshnessColor(info.reportedAt) }} />
-                <span>{t.sourceCommunity} {ago}</span>
+                <span>{ago}</span>
               </>
             )}
             {info?.reporterName && info.reporterName !== 'Anonymous' && (
@@ -121,7 +111,7 @@ export default function StationCard({
           <DirectionsIcon size={15} /> {t.getDirections}
         </a>
 
-        {isCommunity && (
+        {info && (
           <button
             className={`capsule${alreadyConf ? ' success' : ''}`}
             onClick={handleConfirm}

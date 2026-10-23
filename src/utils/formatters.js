@@ -162,29 +162,3 @@ export function validatePrice(raw) {
 
   return { valid: true, value: Math.round(num * 1000) / 1000, error: null }
 }
-
-const FUELS = ['e5', 'e10', 'diesel']
-const COMMUNITY_OVERRIDE_MS = 60 * 60 * 1000 // a report this fresh beats the official price
-
-/**
- * Combine official MTS-K prices (station.official) with community reports.
- * Per fuel: a community report newer than 1 h wins; otherwise the official
- * price; a community report of any age is used when there is no official one.
- * @returns {Record<string, Record<string, {price, source, reportedAt?, confirmations?, reporterName?}>>}
- */
-export function mergePrices(stations, community = {}, now = Date.now()) {
-  const out = {}
-  for (const s of stations) {
-    const reports  = community[s.id] || {}
-    const official = s.official || {}
-    const merged   = {}
-    for (const ft of FUELS) {
-      const rep   = reports[ft]
-      const fresh = rep && now - new Date(rep.reportedAt).getTime() < COMMUNITY_OVERRIDE_MS
-      if (rep && (fresh || !official[ft])) merged[ft] = { ...rep, source: 'community' }
-      else if (official[ft])               merged[ft] = { price: official[ft], source: 'official' }
-    }
-    if (Object.keys(merged).length) out[s.id] = merged
-  }
-  return out
-}

@@ -3,7 +3,7 @@ import translations from '../i18n/translations.js'
 import StationCard from './StationCard.jsx'
 import PriceTip from './PriceTip.jsx'
 import { isSupabaseConfigured } from '../services/priceStore.js'
-import { FuelIcon, WarningIcon, LockIcon, GlobeIcon, CheckIcon } from './Icons.jsx'
+import { FuelIcon, WarningIcon, LockIcon, GlobeIcon } from './Icons.jsx'
 
 export default function StationList({
   stations,
@@ -15,7 +15,6 @@ export default function StationList({
   selectedStation,
   onSelectStation,
   onReportPrice,
-  dataSource,
   language,
 }) {
   const t = translations[language]
@@ -59,15 +58,9 @@ export default function StationList({
   }
 
   const community = isSupabaseConfigured()
-  const official  = dataSource === 'official'
 
   return (
     <Shell language={language}>
-      {official && (
-        <div className="mode-note">
-          <CheckIcon size={13} /> {t.modeOfficial}
-        </div>
-      )}
       <div className="mode-note">
         {community ? <GlobeIcon size={13} /> : <LockIcon size={13} />}
         {community ? t.modeCommunity : t.modeLocal}
@@ -90,20 +83,10 @@ export default function StationList({
         ))}
 
         <p className="footer-note">
-          {official ? (
-            <>
-              {t.footerOfficial}{' '}
-              <a href="https://www.tankerkoenig.de" target="_blank" rel="noopener noreferrer">Tankerkönig</a>
-              {' '}(MTS-K, CC BY 4.0)
-            </>
-          ) : (
-            <>
-              {t.footerStations}{' '}
-              <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">
-                © OpenStreetMap
-              </a>
-            </>
-          )}
+          {t.footerStations}{' '}
+          <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">
+            © OpenStreetMap
+          </a>
           <br />
           {t.footerPrices}
         </p>

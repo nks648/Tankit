@@ -7,10 +7,9 @@ import BottomNav from './components/BottomNav.jsx'
 import PriceReportModal from './components/PriceReportModal.jsx'
 import { CheckIcon } from './components/Icons.jsx'
 import { findStations, loadStationIndex } from './services/stations.js'
-import { fetchOfficialStations, isOfficialConfigured } from './services/tankerkoenig.js'
 import { fetchPricesForStations, reportPrice } from './services/priceStore.js'
 import { geocodePostcode, reverseGeocode } from './services/geocoding.js'
-import { sortStations, mergePrices } from './utils/formatters.js'
+import { sortStations } from './utils/formatters.js'
 import translations from './i18n/translations.js'
 
 // Persist a value in localStorage
@@ -37,8 +36,7 @@ export default function App() {
   const [postcode,        setPostcode]        = useState('')
   const [userCoords,      setUserCoords]      = useState(null)
   const [stations,        setStations]        = useState([])
-  const [community,       setCommunity]       = useState({}) // community reports: { stationId: { e5, e10, diesel } }
-  const [dataSource,      setDataSource]      = useState(null) // 'official' (MTS-K) | 'osm' | null
+  const [prices,          setPrices]          = useState({}) // community reports: { stationId: { e5, e10, diesel } }
   const [loading,         setLoading]         = useState(false)
   const [geoLoading,      setGeoLoading]      = useState(false)
   const [error,           setError]           = useState(null)
@@ -68,7 +66,7 @@ export default function App() {
     try {
       const ids = stationList.map((s) => s.id)
       const p   = await fetchPricesForStations(ids)
-      setCommunity(p)
+      setPrices(p)
     } catch (err) {
       console.warn('TankIT: price refresh failed', err.message)
     }
@@ -79,25 +77,10 @@ export default function App() {
     setLoading(true)
     setError(null)
     setSelectedStation(null)
-    setCommunity({})
+    setPrices({})
 
     try {
-      // Official MTS-K stations + prices when a Tankerkönig key is configured;
-      // otherwise (or if the API is down) the bundled OpenStreetMap list
-      let results = null
-      if (isOfficialConfigured()) {
-        try {
-          const all = await fetchOfficialStations({ lat, lng }) // 25 km, cached
-          results = all.filter((s) => s.dist <= radius)
-          setDataSource('official')
-        } catch (err) {
-          console.warn('TankIT: official prices unavailable, using station list', err.message)
-        }
-      }
-      if (!results) {
-        results = await findStations({ lat, lng, radius })
-        setDataSource('osm')
-      }
+      const results = await findStations({ lat, lng, radius })
       setStations(results)
       setSearched(true)
       await refreshPrices(results)
@@ -178,9 +161,6 @@ export default function App() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [radius])
-
-  // ── Official + community prices, merged per station ───────────────────
-  const prices = useMemo(() => mergePrices(stations, community), [stations, community])
 
   // ── Sorted stations ────────────────────────────────────────────────────
   const sortedStations = useMemo(
@@ -269,7 +249,6 @@ export default function App() {
             selectedStation={selectedStation}
             onSelectStation={handleSelectStation}
             onReportPrice={handleReportPrice}
-            dataSource={dataSource}
             language={language}
           />
         </section>
