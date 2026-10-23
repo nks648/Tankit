@@ -19,7 +19,7 @@ No account needed. Completely free. Forever.
 ```bash
 npm install
 npm run dev        # dev server → http://localhost:5173
-npm run test       # 67 unit tests
+npm run test       # 70 unit tests
 npm run build      # production build → dist/
 npm run ci         # tests + build in one shot (use before committing)
 ```
@@ -31,7 +31,8 @@ npm run ci         # tests + build in one shot (use before committing)
 ```
 Tankit/
 ├── index.html                  # HTML shell (Vite entry point)
-├── vite.config.js              # Vite + Vitest config, dev proxies
+├── vite.config.js              # Vite + Vitest config (base './')
+├── .github/workflows/deploy.yml # CI: test + build + deploy to GitHub Pages
 ├── package.json                # deps + scripts
 ├── .env.example                # env var template (copy → .env)
 ├── supabase/
@@ -61,7 +62,7 @@ Tankit/
 │       ├── setup.js            # jsdom + localStorage mock
 │       ├── formatters.test.js  # 35 tests
 │       ├── priceStore.test.js  # 20 tests
-│       └── overpass.test.js    # 12 tests
+│       └── overpass.test.js    # 15 tests
 ```
 
 ---
@@ -177,7 +178,9 @@ Pure functions, no side effects. All tested.
 | `validatePrice(raw)` | `{ valid, value, error }` for user input |
 
 ### `src/services/overpass.js`
-Talks to the Overpass API via the Vite dev proxy (`/api/overpass`).
+Calls the public Overpass servers directly (CORS-enabled). Tries
+`OVERPASS_ENDPOINTS` in order and falls back to the next mirror when one is
+busy or unreachable; throws `OVERPASS_BUSY` only if all fail.
 
 Key functions:
 - `findStations({ lat, lng, radius })` – main entry point, returns `Station[]`
@@ -271,20 +274,25 @@ Color coding:
 
 ---
 
-## Vite Dev Proxies
+## Network & Hosting
 
-Configured in `vite.config.js` to avoid CORS issues in development:
+There are **no dev proxies**. Every external service is called straight from the
+browser, so `npm run dev`, `npm run preview` and the hosted site behave identically:
 
-| Proxy path | Target | Purpose |
+| Service | URL | Purpose |
 |---|---|---|
-| `/api/nominatim` | `nominatim.openstreetmap.org` | Postcode → lat/lng, sets User-Agent header |
-| `/api/overpass` | `overpass-api.de` | Station discovery |
-| `/api/supabase` | `${VITE_SUPABASE_URL}` | Community prices (optional) |
+| Nominatim | `https://nominatim.openstreetmap.org` | Postcode → lat/lng |
+| Overpass | `overpass-api.de`, `overpass.kumi.systems`, `overpass.private.coffee` | Station discovery (with fallback) |
+| Supabase | `${VITE_SUPABASE_URL}` | Community prices (optional) |
 
-**Production note:** For a deployed static site (Netlify/Vercel/GitHub Pages),
-you need to either:
-1. Configure the same proxies in a `netlify.toml` / `vercel.json`, or
-2. Deploy a small edge function / Cloudflare Worker as the proxy
+`vite.config.js` sets `base: './'` so the build runs from any sub-folder.
+
+**Deployment:** `.github/workflows/deploy.yml` runs `npm run ci` and publishes
+`dist/` to GitHub Pages on every push to `main`. One-time setup: repo
+**Settings → Pages → Source: GitHub Actions**. Live URL:
+https://nks648.github.io/Tankit/ . For Supabase in production, add
+`VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` as repository *variables*
+(Settings → Secrets and variables → Actions → Variables).
 
 ---
 
@@ -346,10 +354,11 @@ npm run test:coverage  # with coverage report
 - hasConfirmed (before/after)
 - localReportCount
 
-`src/__tests__/overpass.test.js` (12 tests)
+`src/__tests__/overpass.test.js` (15 tests)
 - haversine (same point=0, Munich→Berlin≈504km, short distance)
 - parseOSMElement (node, way/center, fallback name, missing coords, fuel tags)
 - buildQuery (has coords, radius, node/way/relation, JSON output)
+- findStations (direct call, mirror fallback, OVERPASS_BUSY when all fail)
 
 ---
 
@@ -392,8 +401,8 @@ npx cap open ios
 
 ## Known Limitations
 
-- **Overpass API rate limit:** Shared public infrastructure. Busy times may return
-  503/504. The app shows a friendly "server busy" message and the user can retry.
+- **Overpass API rate limit:** Shared public infrastructure. The app tries three
+  mirrors; if all are busy it shows a friendly "server busy" message.
 - **Price staleness:** Without Supabase, prices only persist in the user's browser.
   With Supabase, old reports stay in the DB — the `latest_prices` view always
   shows only the most recent report per station+fuel.
@@ -401,9 +410,6 @@ npx cap open ios
   be missing or have outdated info. Users can fix this at openstreetmap.org.
 - **Opening hours:** OSM `opening_hours` strings are not parsed at runtime.
   `isOpen` is always `null` (not shown as open/closed unless a parser is added).
-- **CORS in production:** The Vite dev proxy only works in `npm run dev`.
-  A deployment proxy (Netlify redirects, Vercel rewrites, Cloudflare Worker)
-  is needed for the hosted version.
 
 ---
 

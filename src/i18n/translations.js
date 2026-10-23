@@ -39,6 +39,7 @@ const translations = {
     confirmations:     'confirmed',
     updatePrice:       'Update Price',
     reportCount:       (n) => `${n} price${n === 1 ? '' : 's'} in your area`,
+    toastThanks:       '✅ Prices updated – thank you! 🙏',
 
     fuels: {
       e5:     'Super E5',
@@ -115,6 +116,7 @@ const translations = {
     confirmations:     'bestätigt',
     updatePrice:       'Preis melden',
     reportCount:       (n) => `${n} Preis${n === 1 ? '' : 'e'} in deiner Nähe`,
+    toastThanks:       '✅ Preise aktualisiert – danke! 🙏',
 
     fuels: {
       e5:     'Super E5',

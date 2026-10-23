@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { parseOSMElement, haversine, buildQuery } from '../services/overpass.js'
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { parseOSMElement, haversine, buildQuery, findStations, OVERPASS_ENDPOINTS } from '../services/overpass.js'
 
 // ── haversine ────────────────────────────────────────────────────────────────
 describe('haversine', () => {
@@ -146,5 +146,47 @@ describe('buildQuery', () => {
   it('requests JSON output', () => {
     const query = buildQuery(48, 11, 10000)
     expect(query).toContain('[out:json]')
+  })
+})
+
+// ── findStations: mirror fallback ────────────────────────────────────────────
+describe('findStations', () => {
+  const okBody = {
+    elements: [
+      { type: 'node', id: 7, lat: 48.14, lon: 11.58, tags: { amenity: 'fuel', brand: 'Aral' } },
+    ],
+  }
+
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('calls Overpass directly (no dev-proxy path)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => okBody })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const stations = await findStations({ lat: 48.137, lng: 11.575, radius: 5 })
+
+    expect(fetchMock.mock.calls[0][0]).toBe(OVERPASS_ENDPOINTS[0])
+    expect(stations).toHaveLength(1)
+    expect(stations[0].id).toBe('osm_7')
+  })
+
+  it('falls back to the next mirror when the first one is busy', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: false, status: 504 })
+      .mockResolvedValueOnce({ ok: true, json: async () => okBody })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const stations = await findStations({ lat: 48.137, lng: 11.575, radius: 5 })
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock.mock.calls[1][0]).toBe(OVERPASS_ENDPOINTS[1])
+    expect(stations).toHaveLength(1)
+  })
+
+  it('throws OVERPASS_BUSY when every mirror fails', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')))
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    await expect(findStations({ lat: 48, lng: 11, radius: 5 })).rejects.toThrow('OVERPASS_BUSY')
   })
 })

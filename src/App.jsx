@@ -9,6 +9,7 @@ import { findStations } from './services/overpass.js'
 import { fetchPricesForStations, reportPrice } from './services/priceStore.js'
 import { geocodePostcode, reverseGeocode } from './services/geocoding.js'
 import { sortStations } from './utils/formatters.js'
+import translations from './i18n/translations.js'
 
 // Persist a value in localStorage
 function usePersisted(key, defaultVal) {
@@ -108,7 +109,7 @@ export default function App() {
   // ── GPS geolocation ────────────────────────────────────────────────────
   const handleUseLocation = useCallback(() => {
     if (!navigator.geolocation) {
-      setError('Geolocation is not supported by your browser.')
+      setError('geo_denied')
       return
     }
     setGeoLoading(true)
@@ -179,8 +180,8 @@ export default function App() {
     }
     // Refresh prices after submitting
     await refreshPrices(stations)
-    showToast('✅ Prices updated – thank you! 🙏')
-  }, [reportModal, refreshPrices, stations, showToast])
+    showToast(translations[language].toastThanks)
+  }, [reportModal, refreshPrices, stations, showToast, language])
 
   // ── Desktop detection ──────────────────────────────────────────────────
   const [isDesktop, setIsDesktop] = useState(

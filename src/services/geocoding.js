@@ -3,7 +3,9 @@
  * Converts a German postcode (PLZ) to lat/lng coordinates.
  */
 
-const NOMINATIM_BASE = '/api/nominatim'
+// Nominatim allows browser requests (CORS) – call it directly so the app
+// also works as a static site, not only under `npm run dev`.
+const NOMINATIM_BASE = 'https://nominatim.openstreetmap.org'
 
 /**
  * @param {string} postcode  German postcode (PLZ), e.g. "80331"
@@ -12,7 +14,7 @@ const NOMINATIM_BASE = '/api/nominatim'
 export async function geocodePostcode(postcode) {
   const clean = postcode.trim().replace(/\s+/g, '')
   if (!/^\d{5}$/.test(clean)) {
-    throw new Error('Please enter a valid 5-digit German postcode.')
+    throw new Error('POSTCODE_INVALID')
   }
 
   const url = `${NOMINATIM_BASE}/search?postalcode=${encodeURIComponent(clean)}&country=de&format=json&limit=1&addressdetails=1`
@@ -25,7 +27,7 @@ export async function geocodePostcode(postcode) {
   const data = await res.json()
 
   if (!data || data.length === 0) {
-    throw new Error('Postcode not found. Please check and try again.')
+    throw new Error('POSTCODE_NOT_FOUND')
   }
 
   const place = data[0]

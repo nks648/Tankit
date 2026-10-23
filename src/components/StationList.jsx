@@ -34,13 +34,18 @@ export default function StationList({
   // ── Error ──
   if (error) {
     const isBusy = error.includes('OVERPASS_BUSY')
+    const message =
+      isBusy                               ? t.errorOverpassBusy
+      : error.startsWith('POSTCODE_')      ? t.errorPostcode
+      : error === 'geo_denied'             ? t.errorGeo
+      :                                      t.errorFetching
     return (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         <PriceTip language={language} />
         <div style={{ ...centreStyle, textAlign: 'center', padding: '32px 24px', gap: '12px' }}>
           <span style={{ fontSize: 40 }}>{isBusy ? '⏳' : '⚠️'}</span>
           <span style={{ fontSize: '14px', color: 'var(--accent-yellow)', maxWidth: 280 }}>
-            {isBusy ? t.errorOverpassBusy : t.errorFetching}
+            {message}
           </span>
         </div>
       </div>

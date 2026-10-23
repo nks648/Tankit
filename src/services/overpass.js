@@ -7,7 +7,13 @@
  * Overpass API docs: https://wiki.openstreetmap.org/wiki/Overpass_API
  */
 
-const OVERPASS_URL = '/api/overpass/interpreter'
+// Public Overpass instances, all CORS-enabled so the browser can call them
+// directly. Tried in order: the main server is often busy at peak times.
+export const OVERPASS_ENDPOINTS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
+]
 
 // Max stations to show (Overpass can return hundreds)
 const MAX_STATIONS = 60
@@ -25,21 +31,7 @@ export async function findStations({ lat, lng, radius }) {
   const radiusM = Math.min(radius, 25) * 1000 // cap at 25 km
 
   const query = buildQuery(lat, lng, radiusM)
-
-  const res = await fetch(OVERPASS_URL, {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body:    `data=${encodeURIComponent(query)}`,
-  })
-
-  if (!res.ok) {
-    if (res.status === 429 || res.status === 504) {
-      throw new Error('OVERPASS_BUSY')
-    }
-    throw new Error(`Overpass API error: ${res.status}`)
-  }
-
-  const data = await res.json()
+  const data  = await queryOverpass(query)
 
   if (!data.elements?.length) return []
 
@@ -49,6 +41,31 @@ export async function findStations({ lat, lng, radius }) {
     .filter((s) => s.lat != null && s.lng != null)
     .sort((a, b) => (a.dist ?? 999) - (b.dist ?? 999))
     .slice(0, MAX_STATIONS)
+}
+
+/**
+ * POST a query to each Overpass endpoint in turn until one answers.
+ * Throws OVERPASS_BUSY if every server is overloaded or unreachable.
+ */
+async function queryOverpass(query) {
+  let lastError = null
+
+  for (const url of OVERPASS_ENDPOINTS) {
+    try {
+      const res = await fetch(url, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body:    `data=${encodeURIComponent(query)}`,
+      })
+      if (res.ok) return await res.json()
+      lastError = new Error(`Overpass API error: ${res.status}`)
+    } catch (err) {
+      lastError = err // network error / CORS – try the next mirror
+    }
+  }
+
+  console.warn('TankIT: all Overpass servers failed', lastError?.message)
+  throw new Error('OVERPASS_BUSY')
 }
 
 /**
