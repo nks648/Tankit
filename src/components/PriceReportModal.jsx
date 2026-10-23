@@ -95,8 +95,13 @@ export default function PriceReportModal({
       await onSubmit({ reports, reporterName: reporterName.trim() || 'Anonymous' })
       setSubmitted(true)
       setTimeout(onClose, 1800)
-    } catch {
-      setSubmitError(t.report.submitError)
+    } catch (err) {
+      const code = err?.message
+      setSubmitError(
+        code === 'RATE_LIMIT'    ? t.report.rateLimited
+        : code === 'IMPLAUSIBLE' ? t.report.implausible
+        :                          t.report.submitError
+      )
       setSubmitting(false)
     }
   }

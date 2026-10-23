@@ -19,7 +19,7 @@ No account needed. Completely free. Forever.
 ```bash
 npm install
 npm run dev        # dev server → http://localhost:5173
-npm run test       # 70 unit tests
+npm run test       # 79 unit tests
 node scripts/fetch-stations.mjs   # refresh public/stations-de.json (needs Overpass access)
 npm run build      # production build → dist/
 npm run ci         # tests + build in one shot (use before committing)
@@ -43,7 +43,9 @@ Tankit/
 ├── package.json                # deps + scripts
 ├── .env.example                # env var template (copy → .env)
 ├── supabase/
-│   └── schema.sql              # Postgres schema for community backend
+│   └── schema.sql              # shared community DB: tables, view, spam-safe functions
+├── docs/
+│   └── MTS-K-Zulassungsantrag.md # draft application for official MTS-K prices
 ├── src/
 │   ├── main.jsx                # React root mount
 │   ├── App.jsx                 # Root component – all state lives here
@@ -69,7 +71,8 @@ Tankit/
 │   └── __tests__/
 │       ├── setup.js            # jsdom + localStorage mock
 │       ├── formatters.test.js  # 35 tests
-│       ├── priceStore.test.js  # 20 tests
+│       ├── priceStore.test.js  # 20 tests (device-only mode)
+│       ├── priceStore.supabase.test.js # 9 tests (shared mode, mocked)
 │       └── stations.test.js    # 15 tests
 ```
 
@@ -206,15 +209,16 @@ non-zero and the committed file stays as it is.
 ### `src/services/priceStore.js`
 Storage abstraction — same API regardless of backend.
 
-- `isSupabaseConfigured()` – checks env vars
-- `fetchPricesForStations(ids[])` – bulk fetch
-- `reportPrice({ stationId, fuelType, price, reporterName })` – submit report
-- `confirmPrice(stationId, fuelType)` – confirm + dedup
-- `hasConfirmed(stationId, fuelType)` – check if already confirmed
-- `localReportCount()` – total reports in localStorage
+- `isSupabaseConfigured()` – env vars present
+- `fetchPricesForStations(ids[])` – reads view `latest_prices` (shared) or localStorage
+- `reportPrice({ stationId, fuelType, price, reporterName })` – RPC `report_price`;
+  throws `RATE_LIMIT` / `IMPLAUSIBLE` / `BACKEND_ERROR` (shown in the sheet)
+- `confirmPrice(stationId, fuelType, reportId)` – async, RPC `confirm_price`
+- `hasConfirmed(stationId, fuelType, reportId)`, `getClientId()` (random device id)
 - `getReporterName()` / `setReporterName(name)` – persisted nickname
+- `configureBackend({ url, key })` – tests only
 
-When Supabase is configured, writes go to Supabase **and** localStorage (for instant UI feedback). Reads come from Supabase only.
+If the shared backend is unreachable, reads fall back to this device's prices.
 
 ---
 
@@ -321,20 +325,26 @@ With both set, prices are **shared globally** across all users.
 
 ---
 
-## Supabase Setup (optional)
+## Supabase Setup (shared community prices)
 
-1. Create a free project at [supabase.com](https://supabase.com)
-2. Go to **SQL Editor → New Query**
-3. Paste and run `supabase/schema.sql`
-4. Go to **Project Settings → API** and copy:
-   - Project URL → `VITE_SUPABASE_URL`
-   - `anon` public key → `VITE_SUPABASE_ANON_KEY`
-5. Add both to your `.env` file
+1. Create a free project at [supabase.com](https://supabase.com), region **Frankfurt (eu-central-1)**
+2. **SQL Editor → New query** → paste `supabase/schema.sql` → **Run**
+3. **Project Settings → API Keys**: copy the Project URL and the
+   **publishable** (or legacy `anon`) key – both are public by design
+4. GitHub → **Settings → Secrets and variables → Actions → Variables**:
+   add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`
+5. **Actions → Test & deploy → Run workflow** (default branch)
 
-The schema creates:
-- `price_reports` table with RLS (public read + insert, no delete/update)
-- Indexes for fast station + time lookups
-- `latest_prices` view for efficient production reads
+Database design (`supabase/schema.sql`):
+- Tables `price_reports`, `price_confirmations` – RLS on, **no policies**, so
+  visitors can't read or write them directly
+- View `latest_prices` – newest report per station + fuel (7 days) with
+  confirmation count; exposes no device ids
+- `report_price(...)` – 1 report per device/station/fuel per 10 min, 30 per
+  device per hour, price 0.80–3.50 €, within ±25 % of today's national
+  median once ≥ 10 reports exist
+- `confirm_price(report_id, client_id)` – once per device, not your own report
+- Verified with PGlite (real Postgres) – see commit history
 
 ---
 
@@ -414,8 +424,11 @@ npx cap open ios
 - **Station list freshness:** refreshed weekly from OSM. New or closed
   stations appear after the next refresh (or run the workflow manually).
 - **Price staleness:** Without Supabase, prices only persist in the user's browser.
-  With Supabase, old reports stay in the DB — the `latest_prices` view always
-  shows only the most recent report per station+fuel.
+  With Supabase, `latest_prices` shows the newest report per station + fuel
+  from the last 7 days.
+- **No official prices yet:** see `docs/MTS-K-Zulassungsantrag.md` – needs an
+  MTS-K licence and a small server (Mobilithek client pull). Don't use
+  Tankerkönig (owner decision).
 - **Station completeness:** OSM data is community-maintained. Some stations may
   be missing or have outdated info. Users can fix this at openstreetmap.org.
 - **Opening hours:** OSM `opening_hours` strings are not parsed at runtime.

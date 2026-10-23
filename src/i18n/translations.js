@@ -69,6 +69,8 @@ const translations = {
       thankYouTitle:   'Thank you!',
       thankYouBody:    'You just helped other drivers find cheaper fuel.',
       submitError:     'Could not save prices. Please try again.',
+      rateLimited:     'You just reported this station. Please wait a few minutes.',
+      implausible:     'That price looks very different from others today. Please check it.',
     },
   },
 
@@ -142,6 +144,8 @@ const translations = {
       thankYouTitle:   'Danke!',
       thankYouBody:    'Du hast gerade anderen Fahrern geholfen, günstiger zu tanken.',
       submitError:     'Preise konnten nicht gespeichert werden. Bitte erneut versuchen.',
+      rateLimited:     'Du hast diese Tankstelle gerade gemeldet. Bitte ein paar Minuten warten.',
+      implausible:     'Dieser Preis weicht stark von den heutigen Meldungen ab. Bitte prüfen.',
     },
   },
 }

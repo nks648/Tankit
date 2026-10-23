@@ -111,27 +111,27 @@ describe('fetchPricesForStations', () => {
 describe('confirmPrice', () => {
   it('returns true on first confirmation', async () => {
     await reportPrice({ stationId: 'osm_10', fuelType: 'e5', price: 1.899 })
-    const result = confirmPrice('osm_10', 'e5')
+    const result = await confirmPrice('osm_10', 'e5')
     expect(result).toBe(true)
   })
 
   it('returns false on duplicate confirmation', async () => {
     await reportPrice({ stationId: 'osm_11', fuelType: 'e5', price: 1.899 })
-    confirmPrice('osm_11', 'e5')
-    const second = confirmPrice('osm_11', 'e5')
+    await confirmPrice('osm_11', 'e5')
+    const second = await confirmPrice('osm_11', 'e5')
     expect(second).toBe(false)
   })
 
   it('increments the confirmations counter', async () => {
     await reportPrice({ stationId: 'osm_12', fuelType: 'diesel', price: 1.599 })
-    confirmPrice('osm_12', 'diesel')
+    await confirmPrice('osm_12', 'diesel')
 
     const result = await fetchPricesForStations(['osm_12'])
     expect(result['osm_12']['diesel'].confirmations).toBe(1)
   })
 
-  it('returns false when no price exists to confirm', () => {
-    const result = confirmPrice('osm_99', 'e5')
+  it('returns false when no price exists to confirm', async () => {
+    const result = await confirmPrice('osm_99', 'e5')
     expect(result).toBe(false)
   })
 })
@@ -145,7 +145,7 @@ describe('hasConfirmed', () => {
 
   it('returns true after confirming', async () => {
     await reportPrice({ stationId: 'osm_21', fuelType: 'e5', price: 1.899 })
-    confirmPrice('osm_21', 'e5')
+    await confirmPrice('osm_21', 'e5')
     expect(hasConfirmed('osm_21', 'e5')).toBe(true)
   })
 })

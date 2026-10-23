@@ -31,15 +31,18 @@ export default function StationCard({
   const info  = prices?.[fuelType] ?? null
 
   const ago         = timeAgo(info?.reportedAt, t)
-  const alreadyConf = !!info && hasConfirmed(station.id, fuelType)
+  const alreadyConf = !!info && hasConfirmed(station.id, fuelType, info.reportId)
   const confCount   = info?.confirmations ?? 0
 
-  const handleConfirm = (e) => {
+  const handleConfirm = async (e) => {
     e.stopPropagation()
-    if (!alreadyConf) {
-      confirmPrice(station.id, fuelType)
-      onReportPrice(station, /* skipModal */ true) // parent refreshes prices
+    if (alreadyConf) return
+    try {
+      await confirmPrice(station.id, fuelType, info.reportId)
+    } catch (err) {
+      console.warn('TankIT: confirmation failed', err.message)
     }
+    onReportPrice(station, /* skipModal */ true) // parent refreshes prices
   }
 
   const handleReport = (e) => {

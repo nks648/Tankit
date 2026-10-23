@@ -3,35 +3,61 @@
  *
  * "By people, for people." – Prices are reported and confirmed by real users.
  *
- * Storage backends (automatic fallback):
- *  1. Supabase  – shared globally across all users (configure VITE_SUPABASE_* env vars)
- *  2. localStorage – per-browser demo mode (works instantly, no setup needed)
+ * Storage backends:
+ *  1. Supabase     – shared with everyone (VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY).
+ *                    Reads the view latest_prices; writes via the functions
+ *                    report_price / confirm_price, which enforce spam protection
+ *                    (see supabase/schema.sql).
+ *  2. localStorage – no backend configured: prices stay on this device.
  *
- * Data model:
+ * Data model returned to the app:
  *  prices[stationId][fuelType] = {
- *    price:        number,   // e.g. 1.899
- *    reportedAt:   string,   // ISO date
- *    confirmations: number,  // how many others confirmed this price
- *    reporterName: string,   // "Anonymous" or user's nickname
+ *    price, reportedAt, confirmations, reporterName, reportId?
  *  }
  */
 
 const LS_PRICES_KEY    = 'tankit_community_prices_v2'
 const LS_CONFIRMED_KEY = 'tankit_confirmed_v2'
 const LS_REPORTER_KEY  = 'tankit_reporter_name'
+const LS_CLIENT_KEY    = 'tankit_client_id'
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL?.replace(/\/$/, '')
-const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
+let config = {
+  url: import.meta.env.VITE_SUPABASE_URL?.trim().replace(/\/$/, '') || '',
+  key: import.meta.env.VITE_SUPABASE_ANON_KEY?.trim() || '',
+}
+
+/** For tests: point the store at a (fake) backend, or {} to switch it off. */
+export function configureBackend({ url = '', key = '' } = {}) {
+  config = { url: url.replace(/\/$/, ''), key }
+}
 
 // ── Backend detection ──────────────────────────────────────────────────────
 
 export function isSupabaseConfigured() {
-  return !!(
-    SUPABASE_URL &&
-    SUPABASE_KEY &&
-    SUPABASE_URL.startsWith('https://') &&
-    !SUPABASE_URL.includes('placeholder')
-  )
+  return !!(config.url && config.key && config.url.startsWith('https://') && !config.url.includes('placeholder'))
+}
+
+function headers(extra = {}) {
+  const h = { apikey: config.key, ...extra }
+  // Legacy anon keys are JWTs and also go in Authorization; new sb_publishable_ keys don't
+  if (!config.key.startsWith('sb_')) h.Authorization = `Bearer ${config.key}`
+  return h
+}
+
+async function rpc(name, args) {
+  const res = await fetch(`${config.url}/rest/v1/rpc/${name}`, {
+    method:  'POST',
+    headers: headers({ 'Content-Type': 'application/json' }),
+    body:    JSON.stringify(args),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    const msg  = String(body.message || '')
+    // Errors raised by the database functions carry a short code
+    const code = ['RATE_LIMIT', 'IMPLAUSIBLE', 'OWN_REPORT'].find((c) => msg.includes(c))
+    throw new Error(code || `BACKEND_ERROR ${res.status}`)
+  }
+  return res.json()
 }
 
 // ── LocalStorage helpers ───────────────────────────────────────────────────
@@ -43,6 +69,16 @@ function readLS(key, fallback = {}) {
 
 function writeLS(key, value) {
   try { localStorage.setItem(key, JSON.stringify(value)) } catch {}
+}
+
+/** Random, anonymous id for this browser – used only for spam protection. */
+export function getClientId() {
+  let id = readLS(LS_CLIENT_KEY, null)
+  if (!id) {
+    id = crypto.randomUUID()
+    writeLS(LS_CLIENT_KEY, id)
+  }
+  return id
 }
 
 // ── Reporter name (persisted nickname) ────────────────────────────────────
@@ -58,16 +94,18 @@ export function setReporterName(name) {
 // ── Fetch prices for multiple stations ────────────────────────────────────
 
 /**
- * Returns the latest community price for each station id.
+ * Latest community price per station and fuel.
  * @param {string[]} stationIds
  * @returns {Promise<Record<string, StationPrices>>}
- *   { "osm_123": { e5: { price, reportedAt, confirmations }, ... }, ... }
  */
 export async function fetchPricesForStations(stationIds) {
   if (!stationIds.length) return {}
-
   if (isSupabaseConfigured()) {
-    return fetchFromSupabase(stationIds)
+    try {
+      return await fetchFromSupabase(stationIds)
+    } catch (err) {
+      console.warn('TankIT: shared prices unavailable, showing this device only', err.message)
+    }
   }
   return fetchFromLS(stationIds)
 }
@@ -82,36 +120,23 @@ function fetchFromLS(stationIds) {
 }
 
 async function fetchFromSupabase(stationIds) {
-  // Encode the list for the `in` filter: (osm_1,osm_2,...)
   const list = stationIds.map((id) => `"${id}"`).join(',')
-  const url  = `${SUPABASE_URL}/rest/v1/price_reports` +
-    `?station_id=in.(${list})&order=reported_at.desc&limit=1000`
+  const url  = `${config.url}/rest/v1/latest_prices` +
+    `?select=id,station_id,fuel_type,price,reporter_name,reported_at,confirmations` +
+    `&station_id=in.(${encodeURIComponent(list)})`
 
-  const res = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${SUPABASE_KEY}`,
-      apikey:        SUPABASE_KEY,
-    },
-  })
+  const res = await fetch(url, { headers: headers() })
+  if (!res.ok) throw new Error(`BACKEND_ERROR ${res.status}`)
 
-  if (!res.ok) {
-    console.warn('TankIT: Supabase fetch failed, falling back to localStorage')
-    return fetchFromLS(stationIds)
-  }
-
-  const rows = await res.json()
-
-  // Group by station_id; keep the latest report per (station, fuelType)
   const result = {}
-  for (const row of rows) {
-    if (!result[row.station_id]) result[row.station_id] = {}
-    if (!result[row.station_id][row.fuel_type]) {
-      result[row.station_id][row.fuel_type] = {
-        price:         row.price,
-        reportedAt:    row.reported_at,
-        confirmations: row.confirmations ?? 0,
-        reporterName:  row.reporter_name ?? 'Anonymous',
-      }
+  for (const row of await res.json()) {
+    result[row.station_id] ??= {}
+    result[row.station_id][row.fuel_type] = {
+      price:         Number(row.price),
+      reportedAt:    row.reported_at,
+      confirmations: row.confirmations ?? 0,
+      reporterName:  row.reporter_name ?? 'Anonymous',
+      reportId:      row.id,
     }
   }
   return result
@@ -121,110 +146,77 @@ async function fetchFromSupabase(stationIds) {
 
 /**
  * Submit a community price report.
- * @param {object} params
- * @param {string} params.stationId   e.g. "osm_123456"
- * @param {'e5'|'e10'|'diesel'} params.fuelType
- * @param {number} params.price       e.g. 1.899
- * @param {string} [params.reporterName]
+ * Throws RATE_LIMIT / IMPLAUSIBLE / BACKEND_ERROR when the shared backend refuses it.
  */
 export async function reportPrice({ stationId, fuelType, price, reporterName }) {
   const name = reporterName || getReporterName()
 
   if (isSupabaseConfigured()) {
-    try {
-      await reportToSupabase({ stationId, fuelType, price, reporterName: name })
-      // Also update localStorage cache for instant UI feedback
-      updateLS(stationId, fuelType, { price, reportedAt: new Date().toISOString(), confirmations: 0, reporterName: name })
-      return
-    } catch (err) {
-      console.warn('TankIT: Supabase report failed, saving locally', err.message)
-    }
+    await rpc('report_price', {
+      p_station_id:    stationId,
+      p_fuel_type:     fuelType,
+      p_price:         price,
+      p_reporter_name: name,
+      p_client_id:     getClientId(),
+    })
+    return
   }
 
-  updateLS(stationId, fuelType, {
+  const all = readLS(LS_PRICES_KEY)
+  all[stationId] ??= {}
+  all[stationId][fuelType] = {
     price,
     reportedAt:    new Date().toISOString(),
     confirmations: 0,
     reporterName:  name,
-  })
-}
-
-function updateLS(stationId, fuelType, data) {
-  const all = readLS(LS_PRICES_KEY)
-  if (!all[stationId]) all[stationId] = {}
-  all[stationId][fuelType] = data
-  writeLS(LS_PRICES_KEY, all)
-}
-
-async function reportToSupabase({ stationId, fuelType, price, reporterName }) {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/price_reports`, {
-    method:  'POST',
-    headers: {
-      Authorization:   `Bearer ${SUPABASE_KEY}`,
-      apikey:          SUPABASE_KEY,
-      'Content-Type':  'application/json',
-      Prefer:          'return=minimal',
-    },
-    body: JSON.stringify({
-      station_id:    stationId,
-      fuel_type:     fuelType,
-      price,
-      reporter_name: reporterName,
-    }),
-  })
-  if (!res.ok) {
-    const body = await res.text()
-    throw new Error(`Supabase error ${res.status}: ${body}`)
   }
+  writeLS(LS_PRICES_KEY, all)
 }
 
 // ── Confirm an existing price ──────────────────────────────────────────────
 
 /**
- * Mark an existing price report as confirmed by this user.
- * Returns false if the user already confirmed this price.
+ * Confirm the current price of a station + fuel ("the price is right").
  * @param {string} stationId
  * @param {'e5'|'e10'|'diesel'} fuelType
- * @returns {boolean}  true if confirmation was recorded
+ * @param {string} [reportId]  required for the shared backend
+ * @returns {Promise<boolean>} true if a new confirmation was recorded
  */
-export function confirmPrice(stationId, fuelType) {
-  // Can only confirm if a price report exists
-  const all = readLS(LS_PRICES_KEY)
-  if (!all[stationId]?.[fuelType]) return false
-
+export async function confirmPrice(stationId, fuelType, reportId) {
   const confirmed = readLS(LS_CONFIRMED_KEY)
-  const key       = `${stationId}_${fuelType}`
+  const key       = reportId || `${stationId}_${fuelType}`
+  if (confirmed[key]) return false
 
-  if (confirmed[key]) return false // already confirmed by this user
+  if (isSupabaseConfigured() && reportId) {
+    try {
+      await rpc('confirm_price', { p_report_id: reportId, p_client_id: getClientId() })
+    } catch (err) {
+      if (err.message !== 'OWN_REPORT') throw err
+      return false // you can't confirm your own report
+    }
+  } else {
+    const all = readLS(LS_PRICES_KEY)
+    if (!all[stationId]?.[fuelType]) return false
+    all[stationId][fuelType].confirmations = (all[stationId][fuelType].confirmations ?? 0) + 1
+    writeLS(LS_PRICES_KEY, all)
+  }
 
   confirmed[key] = true
   writeLS(LS_CONFIRMED_KEY, confirmed)
-
-  // Increment the confirmation counter
-  all[stationId][fuelType].confirmations =
-    (all[stationId][fuelType].confirmations ?? 0) + 1
-  writeLS(LS_PRICES_KEY, all)
-
   return true
 }
 
-/**
- * Check if the current user has already confirmed a price.
- */
-export function hasConfirmed(stationId, fuelType) {
-  return !!readLS(LS_CONFIRMED_KEY)[`${stationId}_${fuelType}`]
+/** Has this device already confirmed this price? */
+export function hasConfirmed(stationId, fuelType, reportId) {
+  return !!readLS(LS_CONFIRMED_KEY)[reportId || `${stationId}_${fuelType}`]
 }
 
 // ── Stats ──────────────────────────────────────────────────────────────────
 
-/**
- * Count how many price reports exist in localStorage.
- * Used to show community activity.
- */
+/** Number of price reports saved on this device (local mode). */
 export function localReportCount() {
-  const all = readLS(LS_PRICES_KEY)
   let count = 0
-  for (const station of Object.values(all)) {
+  for (const station of Object.values(readLS(LS_PRICES_KEY))) {
     count += Object.keys(station).length
   }
   return count
