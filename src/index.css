@@ -372,6 +372,11 @@ button:focus-visible, a:focus-visible {
 }
 .toast svg { color: var(--green); }
 
+/* Dark map: invert OSM's light tiles so the map matches dark mode */
+.map-dark .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.9) contrast(0.9) saturate(0.6);
+}
+
 /* ── Map ───────────────────────────────────────────────────────────────── */
 .leaflet-container { background: var(--bg) !important; font-family: var(--font) !important; }
 .leaflet-control-zoom { border: none !important; box-shadow: var(--shadow-float) !important; border-radius: 10px !important; overflow: hidden; }

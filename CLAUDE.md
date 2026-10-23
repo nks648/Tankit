@@ -74,7 +74,7 @@ Tankit/
 |---|---|---|
 | UI framework | React 18 + Vite 5 | Fast HMR, easy Capacitor wrapping later |
 | Map | Leaflet 1.9 + react-leaflet 4 | Free, no API key, great mobile support |
-| Map tiles | CARTO Dark Matter (OSM) | Free, beautiful dark theme |
+| Map tiles | OpenStreetMap standard tiles | Free, no API key (dark mode via CSS filter) |
 | Station data | OpenStreetMap Overpass API | 100% free, community-maintained, global |
 | Geocoding | Nominatim (OSM) | Free, no key, converts PLZ → lat/lng |
 | Price storage | localStorage (default) | Zero setup, works instantly |
@@ -215,8 +215,9 @@ hard-coded colours.
   (`--bg`, `--surface`), labels (`--label`, `--label-2`, `--label-3`),
   `--fill`, `--separator`.
 - **Light + dark mode:** tokens are redefined under
-  `@media (prefers-color-scheme: dark)`; the map switches between CARTO
-  Voyager (light) and Dark Matter tiles to match.
+  `@media (prefers-color-scheme: dark)`; in dark mode the OSM map tiles are
+  inverted with a CSS filter (`.map-dark`) to match. Don't use CARTO
+  basemaps – they now require an API key.
 - **Type:** system font stack (`-apple-system`, SF Pro), tabular numbers
   for prices (`.tabular`).
 - **Components:** frosted `.bar` (header, search, tab bar), `.segmented`

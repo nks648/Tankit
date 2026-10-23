@@ -5,10 +5,10 @@ import 'leaflet/dist/leaflet.css'
 import { getPrice, formatPrice, getDirectionsUrl, formatAddress, freshnessColor } from '../utils/formatters.js'
 import translations from '../i18n/translations.js'
 
-const TILES = {
-  light: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-  dark:  'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-}
+// OpenStreetMap's own tiles: free, no API key. (CARTO basemaps now require a
+// key and return "API KEY REQUIRED" images.) Dark mode is a CSS filter on the
+// tile pane, see .map-dark in index.css.
+const TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
 
 // Follow the system light/dark setting so the map matches the UI
 function useColorScheme() {
@@ -107,15 +107,19 @@ export default function MapView({
   const center = userCoords ? [userCoords.lat, userCoords.lng] : [51.1657, 10.4515] // centre of Germany
 
   return (
-    <MapContainer center={center} zoom={userCoords ? 12 : 6} style={{ width: '100%', height: '100%' }} zoomControl>
+    <MapContainer
+      center={center}
+      zoom={userCoords ? 12 : 6}
+      className={scheme === 'dark' ? 'map-dark' : ''}
+      style={{ width: '100%', height: '100%' }}
+      zoomControl
+    >
       <MapController center={userCoords} selected={selectedStation} />
 
       <TileLayer
-        key={scheme}
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>'
-        url={TILES[scheme]}
-        subdomains="abcd"
-        maxZoom={20}
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+        url={TILE_URL}
+        maxZoom={19}
       />
 
       {userCoords && radius && (

@@ -93,19 +93,31 @@ export default function App() {
   }, [radius, refreshPrices])
 
   // ── Search by postcode ─────────────────────────────────────────────────
-  const handleSearch = useCallback(async () => {
-    if (!postcode.trim()) return
+  const searchPostcode = useCallback(async (code) => {
+    if (!code.trim()) return
     setLoading(true)
     setError(null)
     try {
-      const { lat, lng } = await geocodePostcode(postcode)
+      const { lat, lng } = await geocodePostcode(code)
       setUserCoords({ lat, lng })
       await doSearch(lat, lng)
     } catch (err) {
       setError(err.message)
       setLoading(false)
     }
-  }, [postcode, doSearch])
+  }, [doSearch])
+
+  const handleSearch = useCallback(() => searchPostcode(postcode), [searchPostcode, postcode])
+
+  // ── Shareable links: ?plz=80331 opens straight to that area ────────────
+  useEffect(() => {
+    const plz = new URLSearchParams(window.location.search).get('plz')
+    if (plz && /^\d{5}$/.test(plz)) {
+      setPostcode(plz)
+      searchPostcode(plz)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // run once on load
 
   // ── GPS geolocation ────────────────────────────────────────────────────
   const handleUseLocation = useCallback(() => {
