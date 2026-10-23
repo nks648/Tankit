@@ -71,7 +71,9 @@ export default function StationList({
       )}
       {officialFailed && !official && (
         <div className="mode-note warn">
-          <WarningIcon size={13} /> {t.officialBusy}
+          <WarningIcon size={13} />
+          {/apikey|key/i.test(officialFailed) ? t.officialKeyProblem : t.officialBusy}
+          <span className="detail">(Tankerkönig: {officialFailed})</span>
         </div>
       )}
       <div className="mode-note">

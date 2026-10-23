@@ -39,7 +39,7 @@ export default function App() {
   const [stations,        setStations]        = useState([])
   const [community,       setCommunity]       = useState({}) // community reports: { stationId: { e5, e10, diesel } }
   const [dataSource,      setDataSource]      = useState(null) // 'official' (MTS-K) | 'osm' | null
-  const [officialFailed,  setOfficialFailed]  = useState(false) // key set, but API busy/limited
+  const [officialFailed,  setOfficialFailed]  = useState(null) // reason text when the official API failed
   const [loading,         setLoading]         = useState(false)
   const [geoLoading,      setGeoLoading]      = useState(false)
   const [error,           setError]           = useState(null)
@@ -91,9 +91,9 @@ export default function App() {
           const all = await fetchOfficialStations({ lat, lng }) // 25 km, cached
           results = all.filter((s) => s.dist <= radius)
           setDataSource('official')
-          setOfficialFailed(false)
+          setOfficialFailed(null)
         } catch (err) {
-          setOfficialFailed(true)
+          setOfficialFailed(err.message.replace(/^OFFICIAL_UNAVAILABLE\s*/, '') || 'error')
           console.warn('TankIT: official prices unavailable, using station list', err.message)
         }
       }
