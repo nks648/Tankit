@@ -22,7 +22,7 @@ create extension if not exists pgcrypto;
 
 create table price_reports (
   id             uuid          primary key default gen_random_uuid(),
-  station_id     text          not null check (station_id ~ '^osm_[nwr][0-9]+$'),
+  station_id     text          not null check (station_id ~ '^(osm_[nwr][0-9]+|tk_[0-9a-f-]{36})$'),
   fuel_type      text          not null check (fuel_type in ('e5', 'e10', 'diesel')),
   price          numeric(4,3)  not null check (price between 0.80 and 3.50),
   reporter_name  text          not null default 'Anonymous' check (char_length(reporter_name) between 1 and 30),

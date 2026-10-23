@@ -26,6 +26,8 @@ jobs:
       - run: npm ci
       - run: npm run ci          # unit tests + production build
         env:
+          # Free Tankerkönig key (repository secret) – enables official MTS-K prices
+          VITE_TANKERKOENIG_API_KEY: ${{ secrets.TANKERKOENIG_API_KEY }}
           VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
       - uses: actions/upload-pages-artifact@v3
