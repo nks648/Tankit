@@ -116,12 +116,12 @@ export function timeAgo(isoDate, t) {
  * @returns {string}  CSS color value
  */
 export function freshnessColor(isoDate) {
-  if (!isoDate) return 'var(--text-muted)'
+  if (!isoDate) return 'var(--gray)'
   const hours = (Date.now() - new Date(isoDate)) / 3_600_000
-  if (hours < 2)   return '#06d6a0' // green   – very fresh
-  if (hours < 6)   return '#ffd60a' // yellow  – getting old
-  if (hours < 24)  return '#fb8500' // orange  – stale
-  return '#9b9bb4'                  // gray    – very old
+  if (hours < 2)   return 'var(--green)'  // very fresh
+  if (hours < 6)   return 'var(--yellow)' // getting old
+  if (hours < 24)  return 'var(--orange)' // stale
+  return 'var(--gray)'                    // very old
 }
 
 /**

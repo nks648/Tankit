@@ -57,7 +57,8 @@ Tankit/
 │   │   ├── StationCard.jsx     # Single station: price, confirm, report
 │   │   ├── PriceReportModal.jsx# Waze-style bottom-sheet price form
 │   │   ├── PriceTip.jsx        # "Fill up now / wait" banner
-│   │   └── BottomNav.jsx       # Mobile tab bar
+│   │   ├── BottomNav.jsx       # Mobile tab bar
+│   │   └── Icons.jsx           # SF Symbols-style line icons (currentColor)
 │   └── __tests__/
 │       ├── setup.js            # jsdom + localStorage mock
 │       ├── formatters.test.js  # 35 tests
@@ -203,35 +204,28 @@ When Supabase is configured, writes go to Supabase **and** localStorage (for ins
 
 ---
 
-## CSS Design System
+## Design System (Apple HIG)
 
-All design tokens are CSS variables in `src/index.css`:
+The UI follows Apple's Human Interface Guidelines. All styling lives in
+`src/index.css` as CSS classes + tokens; components use class names, not
+hard-coded colours.
 
-```css
---bg-primary:    #0f0f1a   /* page background */
---bg-secondary:  #1a1a2e   /* header, panels */
---bg-card:       #16213e   /* station cards */
---bg-card-hover: #1e2a4a
---bg-input:      #0d0d1f
-
---accent-blue:   #4361ee   /* primary action, selected */
---accent-green:  #06d6a0   /* best deal, open, fresh */
---accent-yellow: #ffd60a   /* sort active, tip banner */
---accent-red:    #ef233c   /* closed, error */
---accent-orange: #fb8500   /* stale prices */
-
---text-primary:   #ffffff
---text-secondary: #9b9bb4
---text-muted:     #5c5c7a
-
---radius-sm:   8px
---radius-md:   12px
---radius-lg:   20px
---radius-full: 999px
-
---header-height:       60px
---bottom-nav-height:   64px
-```
+- **Colours:** Apple system palette (`--blue #007aff`, `--green #34c759`,
+  `--orange`, `--red`, `--yellow`, `--gray`), grouped backgrounds
+  (`--bg`, `--surface`), labels (`--label`, `--label-2`, `--label-3`),
+  `--fill`, `--separator`.
+- **Light + dark mode:** tokens are redefined under
+  `@media (prefers-color-scheme: dark)`; the map switches between CARTO
+  Voyager (light) and Dark Matter tiles to match.
+- **Type:** system font stack (`-apple-system`, SF Pro), tabular numbers
+  for prices (`.tabular`).
+- **Components:** frosted `.bar` (header, search, tab bar), `.segmented`
+  controls, iOS `.search-field`, inset grouped `.card`s, `.capsule` buttons
+  (`filled`, `tinted`, `success`), iOS bottom `.sheet` with grabber and
+  `.group` rows, `.toast` HUD, Apple Maps-style `.pin` markers.
+- **Icons:** `src/components/Icons.jsx` – no emoji in the UI.
+- **Motion:** sheet slide-up, card rise-in; all disabled under
+  `prefers-reduced-motion`.
 
 ---
 
@@ -257,7 +251,7 @@ All design tokens are CSS variables in `src/index.css`:
 │  Header              │
 │  SearchPanel         │
 │  [active tab content]│  ← StationList or MapView
-│  BottomNav           │  ← Search | Map | Saved
+│  BottomNav           │  ← Stations | Map
 └──────────────────────┘
 ```
 
@@ -265,12 +259,14 @@ All design tokens are CSS variables in `src/index.css`:
 
 ## Map Price Pins
 
-Price pins are Leaflet `divIcon` HTML elements, not image markers.
-Color coding:
-- **Green** (`#06d6a0`) – best price in results
-- **Blue** (`#4361ee`) – currently selected station
-- **Dark** (`#1a1a2e`) – all other stations
-- **Freshness dot** – small colored circle on each pin using `freshnessColor()`
+Price pins are Leaflet `divIcon` capsules (`.pin`) with a pointer, not image markers:
+- **Green** – cheapest price in results
+- **Blue** – currently selected station
+- **White / dark surface** – all other stations; "–" when no price yet
+- **Freshness dot** – coloured by `freshnessColor()` (green < 2 h, yellow < 6 h, orange < 24 h, gray older)
+
+On mobile the map pane is hidden while the list tab is open; `MapController`
+defers moving the map until it is visible (Leaflet throws on a 0×0 map).
 
 ---
 
@@ -344,7 +340,7 @@ npm run test:coverage  # with coverage report
 - validatePrice (valid, too low, too high, non-numeric)
 - sortStations (by price, by dist, priceless stations last)
 - getPriceTip (evening → fillUp, morning → wait, weekend → fillUp)
-- freshnessColor (< 2h green, < 6h yellow, < 24h orange, older gray)
+- freshnessColor (returns theme CSS vars: green < 2h, yellow < 6h, orange < 24h, gray older)
 
 `src/__tests__/priceStore.test.js` (20 tests)
 - isSupabaseConfigured (false when env empty)

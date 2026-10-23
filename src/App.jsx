@@ -5,6 +5,7 @@ import StationList from './components/StationList.jsx'
 import MapView from './components/MapView.jsx'
 import BottomNav from './components/BottomNav.jsx'
 import PriceReportModal from './components/PriceReportModal.jsx'
+import { CheckIcon } from './components/Icons.jsx'
 import { findStations } from './services/overpass.js'
 import { fetchPricesForStations, reportPrice } from './services/priceStore.js'
 import { geocodePostcode, reverseGeocode } from './services/geocoding.js'
@@ -196,15 +197,7 @@ export default function App() {
 
   // ── Render ─────────────────────────────────────────────────────────────
   return (
-    <div style={{
-      display:       'flex',
-      flexDirection: 'column',
-      height:        '100dvh',
-      background:    'var(--bg-primary)',
-      overflow:      'hidden',
-    }}>
-
-      {/* ── Header ── */}
+    <div className="app">
       <Header
         language={language}
         onLanguageToggle={() => setLanguage(language === 'de' ? 'en' : 'de')}
@@ -212,7 +205,6 @@ export default function App() {
         searching={loading}
       />
 
-      {/* ── Search panel ── */}
       <SearchPanel
         language={language}
         postcode={postcode}
@@ -229,18 +221,9 @@ export default function App() {
         geoLoading={geoLoading}
       />
 
-      {/* ── Main content ── */}
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
-
-        {/* Station list */}
-        <div style={{
-          width:         isDesktop ? '400px' : '100%',
-          display:       (isDesktop || activeTab === 'search' || activeTab === 'saved') ? 'flex' : 'none',
-          flexDirection: 'column',
-          borderRight:   isDesktop ? '1px solid var(--border)' : 'none',
-          overflow:      'hidden',
-          flexShrink:    0,
-        }}>
+      {/* Desktop: list + map side by side · Mobile: one pane per tab */}
+      <main className="app-main">
+        <section className="list-pane" style={{ display: isDesktop || activeTab !== 'map' ? 'flex' : 'none' }}>
           <StationList
             stations={sortedStations}
             prices={prices}
@@ -253,13 +236,9 @@ export default function App() {
             onReportPrice={handleReportPrice}
             language={language}
           />
-        </div>
+        </section>
 
-        {/* Map */}
-        <div style={{
-          flex:    1,
-          display: (isDesktop || activeTab === 'map') ? 'block' : 'none',
-        }}>
+        <section className="map-pane" style={{ display: isDesktop || activeTab === 'map' ? 'block' : 'none' }}>
           <MapView
             stations={sortedStations}
             prices={prices}
@@ -271,19 +250,13 @@ export default function App() {
             onReportPrice={handleReportPrice}
             language={language}
           />
-        </div>
-      </div>
+        </section>
+      </main>
 
-      {/* ── Bottom nav (mobile only) ── */}
       {!isDesktop && (
-        <BottomNav
-          language={language}
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
-        />
+        <BottomNav language={language} activeTab={activeTab} onTabChange={setActiveTab} />
       )}
 
-      {/* ── Price report modal ── */}
       {reportModal && (
         <PriceReportModal
           station={reportModal.station}
@@ -294,25 +267,9 @@ export default function App() {
         />
       )}
 
-      {/* ── Toast notification ── */}
       {toast && (
-        <div style={{
-          position:     'fixed',
-          bottom:       isDesktop ? 24 : 80,
-          left:         '50%',
-          transform:    'translateX(-50%)',
-          background:   'var(--bg-card)',
-          color:        'var(--text-primary)',
-          border:       '1px solid var(--accent-green)',
-          borderRadius: 'var(--radius-full)',
-          padding:      '10px 20px',
-          fontSize:     '14px',
-          fontWeight:   '600',
-          zIndex:       2000,
-          boxShadow:    'var(--shadow-lg)',
-          animation:    'fadeIn 0.2s ease',
-          whiteSpace:   'nowrap',
-        }}>
+        <div className="toast" role="status" style={{ bottom: isDesktop ? 28 : 'calc(var(--bottom-nav-height) + 16px)' }}>
+          <CheckIcon size={18} />
           {toast.msg}
         </div>
       )}

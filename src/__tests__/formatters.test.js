@@ -230,26 +230,26 @@ describe('getPriceTip', () => {
 // ── freshnessColor ──────────────────────────────────────────────────────────
 describe('freshnessColor', () => {
   it('returns muted color for null', () => {
-    expect(freshnessColor(null)).toBe('var(--text-muted)')
+    expect(freshnessColor(null)).toBe('var(--gray)')
   })
 
   it('returns green for very recent report (< 2h)', () => {
     const recent = new Date(Date.now() - 30 * 60 * 1000).toISOString()
-    expect(freshnessColor(recent)).toBe('#06d6a0')
+    expect(freshnessColor(recent)).toBe('var(--green)')
   })
 
   it('returns yellow for 3-hour-old report', () => {
     const old = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString()
-    expect(freshnessColor(old)).toBe('#ffd60a')
+    expect(freshnessColor(old)).toBe('var(--yellow)')
   })
 
   it('returns orange for 12-hour-old report', () => {
     const stale = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString()
-    expect(freshnessColor(stale)).toBe('#fb8500')
+    expect(freshnessColor(stale)).toBe('var(--orange)')
   })
 
   it('returns gray for > 24 hours old', () => {
     const veryOld = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString()
-    expect(freshnessColor(veryOld)).toBe('#9b9bb4')
+    expect(freshnessColor(veryOld)).toBe('var(--gray)')
   })
 })

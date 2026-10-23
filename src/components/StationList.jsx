@@ -3,6 +3,7 @@ import translations from '../i18n/translations.js'
 import StationCard from './StationCard.jsx'
 import PriceTip from './PriceTip.jsx'
 import { isSupabaseConfigured } from '../services/priceStore.js'
+import { FuelIcon, WarningIcon, LockIcon, GlobeIcon } from './Icons.jsx'
 
 export default function StationList({
   stations,
@@ -18,88 +19,57 @@ export default function StationList({
 }) {
   const t = translations[language]
 
-  // ── Loading ──
   if (loading) {
     return (
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        <PriceTip language={language} />
-        <div style={centreStyle}>
-          <Spinner />
-          <span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>{t.loading}</span>
+      <Shell language={language}>
+        <div className="empty-state">
+          <div className="spinner" />
+          <div className="empty-text">{t.loading}</div>
         </div>
-      </div>
+      </Shell>
     )
   }
 
-  // ── Error ──
   if (error) {
-    const isBusy = error.includes('OVERPASS_BUSY')
     const message =
-      isBusy                               ? t.errorOverpassBusy
-      : error.startsWith('POSTCODE_')      ? t.errorPostcode
-      : error === 'geo_denied'             ? t.errorGeo
-      :                                      t.errorFetching
+      error.includes('OVERPASS_BUSY')  ? t.errorOverpassBusy
+      : error.startsWith('POSTCODE_')  ? t.errorPostcode
+      : error === 'geo_denied'         ? t.errorGeo
+      :                                  t.errorFetching
     return (
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        <PriceTip language={language} />
-        <div style={{ ...centreStyle, textAlign: 'center', padding: '32px 24px', gap: '12px' }}>
-          <span style={{ fontSize: 40 }}>{isBusy ? '⏳' : '⚠️'}</span>
-          <span style={{ fontSize: '14px', color: 'var(--accent-yellow)', maxWidth: 280 }}>
-            {message}
-          </span>
+      <Shell language={language}>
+        <div className="empty-state warn">
+          <div className="empty-icon"><WarningIcon size={30} /></div>
+          <div className="empty-text">{message}</div>
         </div>
-      </div>
+      </Shell>
     )
   }
 
-  // ── No search yet / empty results ──
   if (!searched || stations.length === 0) {
     return (
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        <PriceTip language={language} />
-        <div style={{ ...centreStyle, textAlign: 'center', padding: '32px 24px', gap: '14px' }}>
-          <span style={{ fontSize: 52 }}>⛽</span>
-          <span style={{ fontSize: '14px', color: 'var(--text-secondary)', maxWidth: 280 }}>
-            {searched && stations.length === 0 ? t.noResults : t.noSearch}
-          </span>
+      <Shell language={language}>
+        <div className="empty-state">
+          <div className="empty-icon"><FuelIcon size={30} /></div>
+          <div className="empty-title">{searched ? t.noResultsTitle : t.welcomeTitle}</div>
+          <div className="empty-text">{searched ? t.noResults : t.noSearch}</div>
         </div>
-      </div>
+      </Shell>
     )
   }
 
-  // ── Results ──
-  return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-      <PriceTip language={language} />
+  const community = isSupabaseConfigured()
 
-      {/* Community mode banner */}
-      <div style={{
-        padding:        '8px 14px',
-        background:     isSupabaseConfigured()
-          ? 'linear-gradient(90deg, rgba(6,214,160,0.1), transparent)'
-          : 'linear-gradient(90deg, rgba(67,97,238,0.1), transparent)',
-        borderBottom:   '1px solid var(--border)',
-        fontSize:       '11px',
-        color:          isSupabaseConfigured() ? 'var(--accent-green)' : 'var(--accent-blue)',
-        flexShrink:     0,
-        display:        'flex',
-        alignItems:     'center',
-        gap:            '6px',
-      }}>
-        {isSupabaseConfigured() ? t.modeCommunity : t.modeLocal}
+  return (
+    <Shell language={language}>
+      <div className="mode-note">
+        {community ? <GlobeIcon size={13} /> : <LockIcon size={13} />}
+        {community ? t.modeCommunity : t.modeLocal}
       </div>
 
-      {/* Station cards */}
-      <div style={{
-        flex:          1,
-        overflowY:     'auto',
-        padding:       '10px',
-        display:       'flex',
-        flexDirection: 'column',
-        gap:           '8px',
-      }}>
+      <div className="station-scroll">
         {stations.map((station, index) => (
-          <div key={station.id} className={index < 5 ? 'fade-in' : ''}>
+          <div key={station.id} className={index < 6 ? 'fade-in' : ''} style={{ animationDelay: `${index * 30}ms` }}>
             <StationCard
               station={station}
               prices={prices[station.id] || null}
@@ -113,45 +83,24 @@ export default function StationList({
           </div>
         ))}
 
-        {/* Footer */}
-        <div style={{
-          textAlign:  'center',
-          padding:    '16px 8px',
-          fontSize:   '11px',
-          color:      'var(--text-muted)',
-          lineHeight: 1.8,
-        }}>
-          Station data:{' '}
-          <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer"
-            style={{ color: 'var(--accent-blue)' }}>
-            © OpenStreetMap contributors
+        <p className="footer-note">
+          {t.footerStations}{' '}
+          <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">
+            © OpenStreetMap
           </a>
           <br />
-          Prices: community-reported. Help others by updating prices!
-        </div>
+          {t.footerPrices}
+        </p>
       </div>
-    </div>
+    </Shell>
   )
 }
 
-const centreStyle = {
-  flex:           1,
-  display:        'flex',
-  flexDirection:  'column',
-  alignItems:     'center',
-  justifyContent: 'center',
-  gap:            '12px',
-}
-
-function Spinner() {
+function Shell({ language, children }) {
   return (
-    <div style={{
-      width:        36,
-      height:       36,
-      border:       '3px solid var(--border)',
-      borderTop:    '3px solid var(--accent-blue)',
-      borderRadius: '50%',
-      animation:    'spin 0.8s linear infinite',
-    }} />
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <PriceTip language={language} />
+      {children}
+    </div>
   )
 }
