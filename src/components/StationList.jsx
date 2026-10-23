@@ -32,8 +32,7 @@ export default function StationList({
 
   if (error) {
     const message =
-      error.includes('OVERPASS_BUSY')  ? t.errorOverpassBusy
-      : error.startsWith('POSTCODE_')  ? t.errorPostcode
+      error.startsWith('POSTCODE_')    ? t.errorPostcode
       : error === 'geo_denied'         ? t.errorGeo
       :                                  t.errorFetching
     return (

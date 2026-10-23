@@ -20,6 +20,7 @@ No account needed. Completely free. Forever.
 npm install
 npm run dev        # dev server → http://localhost:5173
 npm run test       # 70 unit tests
+node scripts/fetch-stations.mjs   # refresh public/stations-de.json (needs Overpass access)
 npm run build      # production build → dist/
 npm run ci         # tests + build in one shot (use before committing)
 ```
@@ -32,7 +33,13 @@ npm run ci         # tests + build in one shot (use before committing)
 Tankit/
 ├── index.html                  # HTML shell (Vite entry point)
 ├── vite.config.js              # Vite + Vitest config (base './')
-├── .github/workflows/deploy.yml # CI: test + build + deploy to GitHub Pages
+├── .github/workflows/
+│   ├── deploy.yml              # test + build + deploy to GitHub Pages
+│   └── update-stations.yml     # weekly: refresh station list, redeploy
+├── scripts/
+│   └── fetch-stations.mjs      # download all German fuel stations from OSM
+├── public/
+│   └── stations-de.json        # ~15k stations, generated – don't edit by hand
 ├── package.json                # deps + scripts
 ├── .env.example                # env var template (copy → .env)
 ├── supabase/
@@ -44,7 +51,7 @@ Tankit/
 │   ├── utils/
 │   │   └── formatters.js       # Pure utility functions (fully tested)
 │   ├── services/
-│   │   ├── overpass.js         # OpenStreetMap station discovery
+│   │   ├── stations.js         # local search over stations-de.json
 │   │   ├── priceStore.js       # Community price storage abstraction
 │   │   └── geocoding.js        # Nominatim postcode → lat/lng
 │   ├── i18n/
@@ -63,7 +70,7 @@ Tankit/
 │       ├── setup.js            # jsdom + localStorage mock
 │       ├── formatters.test.js  # 35 tests
 │       ├── priceStore.test.js  # 20 tests
-│       └── overpass.test.js    # 15 tests
+│       └── stations.test.js    # 15 tests
 ```
 
 ---
@@ -75,7 +82,7 @@ Tankit/
 | UI framework | React 18 + Vite 5 | Fast HMR, easy Capacitor wrapping later |
 | Map | Leaflet 1.9 + react-leaflet 4 | Free, no API key, great mobile support |
 | Map tiles | OpenStreetMap standard tiles | Free, no API key (dark mode via CSS filter) |
-| Station data | OpenStreetMap Overpass API | 100% free, community-maintained, global |
+| Station data | OpenStreetMap, bundled as `public/stations-de.json` | Free; searched locally, so no live dependency on busy Overpass servers |
 | Geocoding | Nominatim (OSM) | Free, no key, converts PLZ → lat/lng |
 | Price storage | localStorage (default) | Zero setup, works instantly |
 | Price storage | Supabase (optional) | Free tier, shared globally across users |
@@ -89,15 +96,19 @@ Tankit/
 ### 1. Station Discovery (no prices)
 
 ```
+Weekly (GitHub Action): scripts/fetch-stations.mjs
+  → Overpass query for every amenity=fuel in Germany (retries 4 mirrors)
+  → public/stations-de.json  (compact rows, committed, then redeploy)
+
+In the app:
 User enters postcode
   → geocoding.js: Nominatim API → { lat, lng }
-  → overpass.js: Overpass API → raw OSM elements
-  → parseOSMElement() → Station[]
-  → sorted by distance
+  → stations.js: findStations() filters the bundled list by distance
+  → Station[] sorted by distance (max 60)
 ```
 
-The Overpass query fetches all `amenity=fuel` nodes/ways/relations within the radius.
-OSM data includes: brand, name, address, opening_hours, fuel type availability.
+Public Overpass servers are frequently at capacity, so the app never queries
+them live. The station list is preloaded on startup and cached.
 **No prices come from OSM** — prices are always community-reported.
 
 ### 2. Community Prices (separate fetch)
@@ -178,16 +189,19 @@ Pure functions, no side effects. All tested.
 | `sortStations(stations, prices, fuelType, sortBy)` | Sort array in-place copy |
 | `validatePrice(raw)` | `{ valid, value, error }` for user input |
 
-### `src/services/overpass.js`
-Calls the public Overpass servers directly (CORS-enabled). Tries
-`OVERPASS_ENDPOINTS` in order and falls back to the next mirror when one is
-busy or unreachable; throws `OVERPASS_BUSY` only if all fail.
+### `src/services/stations.js`
+Searches the bundled station list (`./stations-de.json`) in the browser.
 
-Key functions:
-- `findStations({ lat, lng, radius })` – main entry point, returns `Station[]`
-- `parseOSMElement(el, userLat, userLng)` – normalises raw OSM data
-- `buildQuery(lat, lng, radiusMeters)` – constructs Overpass QL string
+- `loadStationIndex()` – fetch the file once and cache it; throws `STATIONS_UNAVAILABLE`
+- `findStations({ lat, lng, radius })` – bounding-box + haversine filter, nearest first
+- `rowToStation(row, dist)` – compact row → station object (id `osm_<n|w|r><osmId>`)
 - `haversine(lat1, lng1, lat2, lng2)` – great-circle distance in km
+
+### `scripts/fetch-stations.mjs`
+Node script run by `update-stations.yml` (Mondays 03:17 UTC, or manually via
+*Actions → Update station list → Run workflow*). Downloads all fuel stations,
+drops private / non-car ones, writes the JSON. If every mirror fails it exits
+non-zero and the committed file stays as it is.
 
 ### `src/services/priceStore.js`
 Storage abstraction — same API regardless of backend.
@@ -279,7 +293,7 @@ browser, so `npm run dev`, `npm run preview` and the hosted site behave identica
 | Service | URL | Purpose |
 |---|---|---|
 | Nominatim | `https://nominatim.openstreetmap.org` | Postcode → lat/lng |
-| Overpass | `overpass-api.de`, `overpass.kumi.systems`, `overpass.private.coffee` | Station discovery (with fallback) |
+| Stations | `./stations-de.json` (same origin) | Station list, bundled with the site |
 | Supabase | `${VITE_SUPABASE_URL}` | Community prices (optional) |
 
 `vite.config.js` sets `base: './'` so the build runs from any sub-folder.
@@ -351,11 +365,10 @@ npm run test:coverage  # with coverage report
 - hasConfirmed (before/after)
 - localReportCount
 
-`src/__tests__/overpass.test.js` (15 tests)
-- haversine (same point=0, Munich→Berlin≈504km, short distance)
-- parseOSMElement (node, way/center, fallback name, missing coords, fuel tags)
-- buildQuery (has coords, radius, node/way/relation, JSON output)
-- findStations (direct call, mirror fallback, OVERPASS_BUSY when all fail)
+`src/__tests__/stations.test.js` (15 tests)
+- haversine, rowToStation, findStations (radius, ordering, cap of 60)
+- loadStationIndex (caches, STATIONS_UNAVAILABLE + retry)
+- fetch-stations script helpers: toRow, isPublicStation
 
 ---
 
@@ -398,8 +411,8 @@ npx cap open ios
 
 ## Known Limitations
 
-- **Overpass API rate limit:** Shared public infrastructure. The app tries three
-  mirrors; if all are busy it shows a friendly "server busy" message.
+- **Station list freshness:** refreshed weekly from OSM. New or closed
+  stations appear after the next refresh (or run the workflow manually).
 - **Price staleness:** Without Supabase, prices only persist in the user's browser.
   With Supabase, old reports stay in the DB — the `latest_prices` view always
   shows only the most recent report per station+fuel.
@@ -416,4 +429,5 @@ npx cap open ios
 2. Run `npm run ci` before pushing — must be green
 3. Keep pure utility logic in `src/utils/` (testable, no React imports)
 4. Keep API calls in `src/services/` (mockable in tests)
+6. Never query Overpass from the app at runtime – use the bundled station list
 5. Components should be presentational where possible — state in `App.jsx`

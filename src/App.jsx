@@ -6,7 +6,7 @@ import MapView from './components/MapView.jsx'
 import BottomNav from './components/BottomNav.jsx'
 import PriceReportModal from './components/PriceReportModal.jsx'
 import { CheckIcon } from './components/Icons.jsx'
-import { findStations } from './services/overpass.js'
+import { findStations, loadStationIndex } from './services/stations.js'
 import { fetchPricesForStations, reportPrice } from './services/priceStore.js'
 import { geocodePostcode, reverseGeocode } from './services/geocoding.js'
 import { sortStations } from './utils/formatters.js'
@@ -108,6 +108,9 @@ export default function App() {
   }, [doSearch])
 
   const handleSearch = useCallback(() => searchPostcode(postcode), [searchPostcode, postcode])
+
+  // ── Start downloading the station list right away (it is a static file)
+  useEffect(() => { loadStationIndex().catch(() => {}) }, [])
 
   // ── Shareable links: ?plz=80331 opens straight to that area ────────────
   useEffect(() => {
