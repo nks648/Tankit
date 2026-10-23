@@ -19,7 +19,7 @@ No account needed. Completely free. Forever.
 ```bash
 npm install
 npm run dev        # dev server → http://localhost:5173
-npm run test       # 70 unit tests
+npm run test       # 79 unit tests
 node scripts/fetch-stations.mjs   # refresh public/stations-de.json (needs Overpass access)
 npm run build      # production build → dist/
 npm run ci         # tests + build in one shot (use before committing)
@@ -52,6 +52,7 @@ Tankit/
 │   │   └── formatters.js       # Pure utility functions (fully tested)
 │   ├── services/
 │   │   ├── stations.js         # local search over stations-de.json
+│   │   ├── tankerkoenig.js     # official MTS-K prices (optional API key)
 │   │   ├── priceStore.js       # Community price storage abstraction
 │   │   └── geocoding.js        # Nominatim postcode → lat/lng
 │   ├── i18n/
@@ -70,7 +71,8 @@ Tankit/
 │       ├── setup.js            # jsdom + localStorage mock
 │       ├── formatters.test.js  # 35 tests
 │       ├── priceStore.test.js  # 20 tests
-│       └── stations.test.js    # 15 tests
+│       ├── stations.test.js    # 15 tests
+│       └── tankerkoenig.test.js # 9 tests
 ```
 
 ---
@@ -82,7 +84,8 @@ Tankit/
 | UI framework | React 18 + Vite 5 | Fast HMR, easy Capacitor wrapping later |
 | Map | Leaflet 1.9 + react-leaflet 4 | Free, no API key, great mobile support |
 | Map tiles | OpenStreetMap standard tiles | Free, no API key (dark mode via CSS filter) |
-| Station data | OpenStreetMap, bundled as `public/stations-de.json` | Free; searched locally, so no live dependency on busy Overpass servers |
+| Official prices | Tankerkönig API (MTS-K data, CC BY 4.0) | Free key; real prices for all ~14k reporting stations |
+| Station data (fallback) | OpenStreetMap, bundled as `public/stations-de.json` | Used when no key / API down; searched locally |
 | Geocoding | Nominatim (OSM) | Free, no key, converts PLZ → lat/lng |
 | Price storage | localStorage (default) | Zero setup, works instantly |
 | Price storage | Supabase (optional) | Free tier, shared globally across users |
@@ -111,6 +114,20 @@ Public Overpass servers are frequently at capacity, so the app never queries
 them live. The station list is preloaded on startup and cached.
 **No prices come from OSM** — prices are always community-reported.
 
+### 1b. Official prices (when a Tankerkönig key is configured)
+
+```
+User searches
+  → tankerkoenig.js: list.php, rad=25, type=all (one request per location,
+    cached 5 min; smaller radii are filtered locally)
+  → MTS-K stations with live e5/e10/diesel + isOpen  (ids "tk_<uuid>")
+  → on any API error: fall back to the bundled OSM list (step 1)
+```
+
+Tankerkönig rules we follow: requests only on user action, ≤ 25 km,
+no bulk/background downloads, show all stations in the radius, credit
+"Tankerkönig (MTS-K, CC BY 4.0)", key never on GitHub.
+
 ### 2. Community Prices (separate fetch)
 
 ```
@@ -127,6 +144,13 @@ Prices are stored per `(stationId, fuelType)` with:
 - `reporterName` – "Anonymous" or user nickname
 
 ### 3. Merge & Display
+
+`mergePrices(stations, community)` (formatters.js): per fuel, a community
+report newer than 1 h wins; otherwise the official price; a community
+report of any age fills in when there is no official price. Each merged
+entry carries `source: 'official' | 'community'` – only community prices
+can be confirmed.
+
 
 ```
 sortStations(stations, prices, fuelType, sortBy)
@@ -311,6 +335,7 @@ https://nks648.github.io/Tankit/ . For Supabase in production, add
 
 | Variable | Required | Description |
 |---|---|---|
+| `VITE_TANKERKOENIG_API_KEY` | No | Free Tankerkönig key → official prices. In production: repo **secret** `TANKERKOENIG_API_KEY`. Never commit it. |
 | `VITE_SUPABASE_URL` | No | Supabase project URL e.g. `https://xxx.supabase.co` |
 | `VITE_SUPABASE_ANON_KEY` | No | Supabase anon/public key |
 
@@ -369,6 +394,11 @@ npm run test:coverage  # with coverage report
 - haversine, rowToStation, findStations (radius, ordering, cap of 60)
 - loadStationIndex (caches, STATIONS_UNAVAILABLE + retry)
 - fetch-stations script helpers: toRow, isPublicStation
+
+`src/__tests__/tankerkoenig.test.js` (9 tests)
+- normalizeOfficial (capitals tidied, prices `false` → null)
+- fetchOfficialStations (rad=25, 5-min cache, error handling)
+- mergePrices (official default, fresh report wins, old report doesn't, fallback)
 
 ---
 
